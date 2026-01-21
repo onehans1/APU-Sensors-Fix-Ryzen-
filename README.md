@@ -1,58 +1,90 @@
-APU Sensors Fix (Ryzen APU) — Unraid + Dynamix System Temp
-This is a simple startup script that ensures Ryzen APU temperature sensors are visible to Dynamix System Temp (and the dashboard), by loading the correct kernel modules on boot/array start.
-What it fixes
-On some Ryzen APU systems (e.g. 5825U), Dynamix System Temp may show ...°C until sensors are loaded. This script loads:
-k10temp → CPU temperature (Tctl)
-amdgpu → iGPU temperature (edge) (if supported/loaded)
-NVMe temps show automatically via nvme hwmon
-Install (Recommended: User Scripts plugin)
-1) Install User Scripts
-Unraid WebUI → Apps → search User Scripts → Install.
-2) Create a new script
-Unraid WebUI → Settings → User Scripts
-Click Add New Script → name it:
-APU Sensors Fix (Ryzen)
-3) Paste this code
-Copy code
-Bash
-#!/bin/bash
-# APU Sensors Fix for Ryzen APU systems (Unraid)
-# Ensures Dynamix System Temp can see: k10temp (CPU Tctl), amdgpu (edge), nvme composite
+# APU Sensors Fix (Ryzen) — Unraid
 
-logger -t apu-sensors "Loading Ryzen APU sensor modules..."
+This repo contains a simple startup script that helps **Unraid + Dynamix System Temp** detect temperature sensors on some **AMD Ryzen APU** systems.
 
-# CPU sensor (Ryzen)
-modprobe k10temp 2>/dev/null || true
+On certain Ryzen APU / mini-PC boards, Unraid boots fine but the **System Temp** plugin shows:
 
-# iGPU sensor (only if iGPU driver exists/loads)
-modprobe amdgpu 2>/dev/null || true
+- `Temperature: ... °C` (CPU / Motherboard)
+- “No drivers detected”
+- or it only shows NVMe/GPU temps until you manually run `modprobe`
 
-# Let hwmon populate
-sleep 2
+This script fixes that by loading the right sensor modules early and giving `hwmon` a moment to populate **before** the System Temp plugin scans.
 
-# Optional: log detected sensors (useful for debugging)
-if command -v sensors >/dev/null 2>&1; then
-  sensors 2>/dev/null | logger -t apu-sensors
-fi
+---
 
-logger -t apu-sensors "Done."
-exit 0
-4) Set it to run automatically
-In User Scripts, set the schedule to:
-✅ At Startup of Array
-(Works reliably and avoids “...°C” after reboot.)
-Configure Dynamix System Temp
-Unraid WebUI → Settings → System Temp → click Detect
-Then set:
-Processor temperature: k10temp - Tctl
-Mainboard temperature: nvme - Composite (best “system heat” proxy on many mini-PCs)
-Click Apply
-Verify (optional)
+## What the script does
+
+- Loads **Ryzen CPU temperature sensor** module: `k10temp`
+- (Optional) Loads iGPU sensor module: `amdgpu` (if present/available)
+- Waits briefly so `/sys/class/hwmon/` fills in
+- Allows Dynamix System Temp to list sensors like:
+  - `k10temp - Tctl` (CPU)
+  - `amdgpu - edge` (GPU edge)
+  - `nvme - Composite` (often a good “board/case temp” proxy on APU boxes)
+
+---
+
+## Requirements
+
+- Unraid (recommended 7.x)
+- **Dynamix System Temp** plugin installed
+- **User Scripts** plugin installed (recommended method)
+
+---
+
+## Install (recommended): User Scripts
+
+### 1) Install “User Scripts”
+Unraid WebUI → **Apps** → search **User Scripts** → Install.
+
+### 2) Create a new script
+Unraid WebUI → **Settings → User Scripts** → **Add New Script**
+
+Name it:
+`APU Sensors Fix (Ryzen)`
+
+Paste the contents of this repo’s script into it (or copy it from this file).
+
+### 3) Set it to run at Array Start
+In User Scripts, set:
+
+✅ **Schedule**: `At Startup of Array`
+
+This is important — it makes sure the sensors are loaded before Dynamix System Temp tries to detect them.
+
+### 4) Reboot (recommended)
+Reboot Unraid once after setting the script.
+
+---
+
+## Configure Dynamix System Temp
+
+After reboot:
+
+1. Unraid WebUI → **Settings → System Temp**
+2. Click **Detect**
+3. Pick sensors:
+
+### Processor temperature
+Select:
+- `k10temp - Tctl`
+
+### Mainboard temperature
+Many Ryzen APU boxes do not expose a true motherboard sensor.
+Best practical choice is usually:
+- `nvme - Composite`
+
+(You can also choose another sensor if you prefer, but “Composite” is commonly the most stable.)
+
+4. Click **Apply**
+
+Now the Dashboard should show real temps instead of `... °C`.
+
+---
+
+## Verify in SSH
+
 SSH into Unraid and run:
-Copy code
-Bash
+
+```bash
 sensors
-You should see entries like:
-k10temp-pci-00c3 → Tctl
-amdgpu-pci-0400 → edge
-nvme-pci-0300 → Composite
