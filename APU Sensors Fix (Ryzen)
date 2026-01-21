@@ -1,0 +1,22 @@
+#!/bin/bash
+# APU Sensors Fix for Ryzen APU systems (Unraid)
+# Ensures Dynamix System Temp can see: k10temp (CPU Tctl), amdgpu (edge), nvme composite
+
+logger -t apu-sensors "Loading Ryzen APU sensor modules..."
+
+# CPU sensor (Ryzen)
+modprobe k10temp 2>/dev/null || true
+
+# iGPU sensor (only if iGPU driver is loaded)
+modprobe amdgpu 2>/dev/null || true
+
+# Optional: ensure hwmon tree is populated before Dynamix reads it
+sleep 2
+
+# Quick log of what sensors are visible (handy for troubleshooting)
+if command -v sensors >/dev/null 2>&1; then
+  sensors 2>/dev/null | logger -t apu-sensors
+fi
+
+logger -t apu-sensors "Done."
+exit 0
